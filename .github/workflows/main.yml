@@ -55,7 +55,6 @@ jobs:
         run: pip install poetry
 
       - name: Install project dependencies
-        # Install all extras to ensure tests can run against UI components if needed
         run: poetry install --with dev --extras "desktop mobile"
 
       - name: Generate Protobuf code
@@ -75,11 +74,15 @@ jobs:
   build_desktop:
     name: "3. Build & Sign Desktop Binaries"
     needs: test_suite
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') # Only run on tag push
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     strategy:
       matrix:
         os: [windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
+    env:
+      # ** FIX **: Check for secret existence here and set an env var.
+      WINDOWS_PFX_B64_PRESENT: ${{ secrets.WINDOWS_PFX_B64 != '' }}
+      APPLE_ID_PRESENT: ${{ secrets.APPLE_ID != '' }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -103,7 +106,8 @@ jobs:
         run: poetry run pyinstaller build-specs/desktop.spec --noconfirm
 
       - name: Sign Windows Executable
-        if: runner.os == 'Windows' && secrets.WINDOWS_PFX_B64 != ''
+        # ** FIX **: Check the env var instead of the secret directly.
+        if: runner.os == 'Windows' && env.WINDOWS_PFX_B64_PRESENT == 'true'
         uses: dlemstra/code-sign-action@v1
         with:
           certificate: ${{ secrets.WINDOWS_PFX_B64 }}
@@ -113,39 +117,36 @@ jobs:
           timestamp_url: http://timestamp.sectigo.com
 
       - name: Sign and Notarize macOS App
-        if: runner.os == 'macOS' && secrets.APPLE_ID != ''
-        # This is a complex, multi-step process. A placeholder is used for clarity.
-        # See https://github.com/apple-actions/import-codesign-certs for a real implementation.
-        run: echo "Signing and notarizing on macOS..."
-      
+        # ** FIX **: Check the env var.
+        if: runner.os == 'macOS' && env.APPLE_ID_PRESENT == 'true'
+        run: echo "Signing and notarizing on macOS..." # Placeholder for complex signing logic
+
       - name: Prepare Artifact
+        # ** FIX **: Consolidated artifact packaging for all platforms.
+        id: prepare_artifact
         shell: bash
         run: |
           if [ "${{ runner.os }}" == "Windows" ]; then
             7z a -tzip App-windows-x64.zip ./dist/windows/*
+            echo "artifact_path=App-windows-x64.zip" >> $GITHUB_OUTPUT
+            echo "artifact_name=App-Windows-x64" >> $GITHUB_OUTPUT
           elif [ "${{ runner.os }}" == "macOS" ]; then
             hdiutil create -volname CryptoChart -srcfolder dist/macos/CryptoChart.app -ov -format UDZO App-macos.dmg
+            echo "artifact_path=App-macos.dmg" >> $GITHUB_OUTPUT
+            echo "artifact_name=App-macOS" >> $GITHUB_OUTPUT
           fi
 
       - name: Upload Artifact
+        # ** FIX **: Single, robust upload step.
         uses: actions/upload-artifact@v4
         with:
-          name: App-${{ runner.os }}
-          path: ./*.zip # Upload zip for windows
-          path-if-no-files-found: error
-        
-      - name: Upload macOS Artifact
-        if: runner.os == 'macOS'
-        uses: actions/upload-artifact@v4
-        with:
-          name: App-${{ runner.os }}
-          path: ./*.dmg # Upload dmg for mac
+          name: ${{ steps.prepare_artifact.outputs.artifact_name }}
+          path: ${{ steps.prepare_artifact.outputs.artifact_path }}
           path-if-no-files-found: error
 
   build_mobile_debug:
     name: "4. Build Android Debug APK"
     needs: test_suite
-    # This job runs on all pushes/PRs to main for testing purposes
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -162,9 +163,8 @@ jobs:
           buildozer_version: master
       
       - name: Build with Buildozer (Debug)
-        # The 'debug' command automatically creates and uses a debug keystore.
-        # No secrets are required for this step.
-        run: buildozer android debug
+        # 'debug' command auto-generates and uses a debug key. No secrets needed.
+        run: buildozer --log_level 2 android debug
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
@@ -186,14 +186,15 @@ jobs:
         with:
           path: artifacts
 
-      - name: List downloaded artifacts
+      - name: Display structure of downloaded files
         run: ls -R artifacts
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           fail_on_unmatched_files: true
+          # ** FIX **: Updated paths to match new artifact names.
           files: |
-            artifacts/App-Windows/App-windows-x64.zip
+            artifacts/App-Windows-x64/App-windows-x64.zip
             artifacts/App-macOS/App-macos.dmg
             artifacts/App-Android-debug/*.apk

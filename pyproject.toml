@@ -48,7 +48,6 @@ requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.ruff]
-# ** FIX **: Moved settings into the new [lint] section to avoid deprecation warning.
 line-length = 88
 
 [tool.ruff.lint]
@@ -61,11 +60,14 @@ ignore = [
     "S101",   # Ignore 'assert' warnings in test files
 ]
 
+# ** FINAL FIX **: Exclude auto-generated files from linting.
+exclude = ["src/schemas/market_data_pb2.py"]
+
 [tool.mypy]
 python_version = "3.11"
 warn_return_any = true
 ignore_missing_imports = true
-exclude = ['src/schemas/market_data_pb2.py'] # Ignore generated file
+exclude = ['src/schemas/market_data_pb2.py']
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

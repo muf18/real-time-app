@@ -1,5 +1,4 @@
 import asyncio
-import logging
 import queue
 import threading
 from typing import Callable, List

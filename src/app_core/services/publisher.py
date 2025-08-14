@@ -4,6 +4,7 @@ from typing import Any, Set
 
 class Publisher:
     """A simple asyncio-based fan-out publisher."""
+
     def __init__(self):
         self.subscribers: Set[asyncio.Queue] = set()
 
@@ -23,7 +24,6 @@ class Publisher:
             try:
                 queue.put_nowait(message)
             except asyncio.QueueFull:
-                # Handle backpressure if necessary, e.g., log a warning
                 # For this real-time app, we prefer dropping if UI can't keep up.
                 pass
 

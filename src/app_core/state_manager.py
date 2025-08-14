@@ -1,19 +1,19 @@
 import logging
 from pathlib import Path
-from typing import IO
 
 import orjson
 from pydantic import BaseModel, Field
 
 
-# Define the structure of our persistent state
 class AppState(BaseModel):
+    """Strongly-typed application persistent state."""
     last_symbol: str = Field(default="BTC/USD")
     last_timeframe: str = Field(default="1h")
 
 
 class StateManager:
     """Handles loading and saving the application's persistent state."""
+
     def __init__(self, file_path: Path):
         self._file_path = file_path
         self._state = self._load_state()
@@ -23,22 +23,21 @@ class StateManager:
         if not self._file_path.exists():
             return AppState()
         try:
-            with open(self._file_path, "rb") as f:
+            with self._file_path.open("rb") as f:
                 data = orjson.loads(f.read())
                 return AppState(**data)
-        except (orjson.JSONDecodeError, TypeError, ValueError):
-            # If file is corrupt or malformed, start with a default state
+        except (orjson.JSONDecodeError, TypeError, ValueError, OSError):
+            # If file is corrupt or unreadable, start with a default state
             return AppState()
 
     def save_state(self):
         """Saves the current state to the JSON file."""
         try:
-            # Ensure parent directory exists
             self._file_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(self._file_path, "wb") as f:
+            with self._file_path.open("wb") as f:
                 f.write(orjson.dumps(self._state.model_dump()))
         except OSError as e:
-            logging.error("Error saving state: %s", e)
+            logging.error("Error saving application state: %s", e)
 
     @property
     def current_state(self) -> AppState:
@@ -53,7 +52,6 @@ class StateManager:
         self.save_state()
 
 
-# Create a default instance for the application to use.
-# The path can be made platform-specific in a real app (e.g., using appdirs).
+# A single instance for the application to use.
 APP_DATA_DIR = Path.home() / ".cryptochart"
 state_manager = StateManager(APP_DATA_DIR / "app_state.json")

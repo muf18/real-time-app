@@ -111,7 +111,6 @@ class SettingsScreen(Screen):
     symbols_rv = ObjectProperty(None)
 
     def on_enter(self, *args):
-        # Populate the RecycleView with available symbols
         self.symbols_rv.data = [
             {"text": symbol} for symbol in config.exchange_integrations.keys()
         ]

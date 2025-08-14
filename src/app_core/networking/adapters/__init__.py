@@ -1,0 +1,1 @@
+# Makes 'adapters' a package.

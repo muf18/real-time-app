@@ -1,0 +1,41 @@
+syntax = "proto3";
+
+package cryptochart;
+
+// Raw trade update directly from an exchange, normalized.
+message PriceUpdate {
+  string symbol = 1;      // e.g., "BTC/USD"
+  string exchange = 2;    // e.g., "Coinbase"
+  // Using string for price and size to maintain precision without floating point errors.
+  // These will be converted to scaled integers (Decimal) for calculations.
+  string price = 3;       // e.g., "65123.45"
+  string size = 4;        // e.g., "0.0012"
+  string side = 5;        // "BUY" or "SELL"
+  string exchange_timestamp_utc = 6; // RFC3339 format, e.g., "2025-08-14T21:50:00.123Z"
+  string client_received_timestamp_utc = 7; // RFC3339 format, when our client received it
+}
+
+// Data point aggregated by our application, ready for UI consumption.
+message AggregatedDataPoint {
+  string symbol = 1;        // "BTC/USD"
+  string timeframe = 2;     // "1m", "5m", etc.
+  string timestamp_utc = 3; // Start of the candle/bar, RFC3339 format
+  string vwap = 4;
+  string cumulative_volume = 5;
+  string last_price = 6;
+  string high_price = 7;    // Highest price in the candle
+  string low_price = 8;     // Lowest price in the candle
+  string open_price = 9;   // Open price of the candle
+}
+
+// Standard candlestick data, typically for historical fetches.
+message Candle {
+  string symbol = 1;
+  string timeframe = 2;
+  string open_time_utc = 3;
+  string open = 4;
+  string high = 5;
+  string low = 6;
+  string close = 7;
+  string volume = 8;
+}

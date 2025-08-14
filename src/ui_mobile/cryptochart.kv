@@ -1,0 +1,91 @@
+#:import Factory kivy.factory.Factory
+#:import Graph kivy_garden.graph.Graph
+
+<ChartScreen>:
+    graph_widget: graph_widget
+    price_label: price_label
+    symbol_label: symbol_label
+    timeframe_spinner: timeframe_spinner
+
+    BoxLayout:
+        orientation: 'vertical'
+        
+        ActionBar:
+            ActionView:
+                ActionPrevious:
+                    title: 'Chart'
+                    with_previous: False
+                ActionOverflow:
+                ActionButton:
+                    text: 'Settings'
+                    on_press: app.root.current = 'settings'
+
+        BoxLayout:
+            orientation: 'horizontal'
+            size_hint_y: None
+            height: '48dp'
+            padding: '8dp'
+            spacing: '8dp'
+
+            Label:
+                id: symbol_label
+                text: root.current_symbol
+                font_size: '20sp'
+                bold: True
+                size_hint_x: 0.4
+
+            Label:
+                id: price_label
+                text: '0.00'
+                font_size: '20sp'
+                size_hint_x: 0.4
+
+            Spinner:
+                id: timeframe_spinner
+                text: root.current_timeframe
+                values: app.state.supported_timeframes
+                size_hint_x: 0.2
+                on_text: root.on_timeframe_select(self.text)
+
+        Graph:
+            id: graph_widget
+            xlabel: 'Time'
+            ylabel: 'Price'
+            x_ticks_major: 3600 # A tick every hour
+            y_ticks_major: 1000
+            padding: 5
+            x_grid: True
+            y_grid: True
+            xmin: -1
+            xmax: 1
+            ymin: -1
+            ymax: 1
+            x_grid_label: True
+            y_grid_label: True
+
+<SettingsScreen>:
+    symbols_rv: symbols_rv
+    
+    BoxLayout:
+        orientation: 'vertical'
+
+        ActionBar:
+            ActionView:
+                ActionPrevious:
+                    title: 'Select Symbol'
+                    on_press: app.root.current = 'chart'
+        
+        RecycleView:
+            id: symbols_rv
+            viewclass: 'Button'
+            RecycleBoxLayout:
+                default_size: None, dp(56)
+                default_size_hint: 1, None
+                size_hint_y: None
+                height: self.minimum_height
+                orientation: 'vertical'
+                spacing: dp(2)
+
+<Button@Button>:
+    # Template for buttons inside the RecycleView
+    on_press: app.root.get_screen('settings').select_symbol(self.text)

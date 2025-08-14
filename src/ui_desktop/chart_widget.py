@@ -15,6 +15,7 @@ pg.setConfigOptions(antialias=True, useOpenGL=True)
 
 class CandlestickItem(pg.GraphicsObject):
     """Custom GraphicsObject for displaying candlestick data."""
+
     def __init__(self, data):
         pg.GraphicsObject.__init__(self)
         self.data = data  # list of dicts with (time, open, high, low, close)
@@ -28,8 +29,11 @@ class CandlestickItem(pg.GraphicsObject):
             w = (self.data[1]["time"] - self.data[0]["time"]) / 2.0
         else:
             w = 30  # Default width for a single candle
+
         for candle in self.data:
-            pen_color = (0, 200, 0) if candle["close"] >= candle["open"] else (200, 0, 0)
+            pen_color = (
+                (0, 200, 0) if candle["close"] >= candle["open"] else (200, 0, 0)
+            )
             p.setPen(pg.mkPen(color=pen_color))
             p.setBrush(pg.mkBrush(color=pen_color))
             # Draw wick
@@ -49,10 +53,10 @@ class CandlestickItem(pg.GraphicsObject):
                 )
         p.end()
 
-    def paint(self, p, *args):
+    def paint(self, p, *args):  # noqa: N802 - Qt override
         p.drawPicture(0, 0, self.picture)
 
-    def boundingRect(self):
+    def boundingRect(self):  # noqa: N802 - Qt override
         return pg.QtCore.QRectF(self.picture.boundingRect())
 
 
@@ -137,7 +141,7 @@ class ChartWidget(QWidget):
         self.price_plot.addItem(self.candle_item)
 
         if vwaps:
-            self.vwap_item.setData(x=times[-len(vwaps) :], y=vwaps)
+            self.vwap_item.setData(x=times[-len(vwaps):], y=vwaps)
 
     def clear_chart(self):
         self._data_buffer.clear()
@@ -146,127 +150,3 @@ class ChartWidget(QWidget):
             self.candle_item = None
         self.vwap_item.clear()
         self.last_price_line.setPos(0)
-```*(Note: I've removed the incomplete volume plot from `chart_widget.py` for clarity and correctness, as it wasn't fully implemented and caused some of the linter errors.)*
-
-#### **`src/ui_desktop/controller.py`**
-```python
-import asyncio
-import logging
-import queue
-import threading
-from typing import List
-
-from PySide6.QtCore import QObject, QThread, Signal
-
-from src.app_core.analytics.aggregator import SymbolAggregator
-from src.app_core.config import config
-from src.app_core.networking.manager import ConnectionManager, ADAPTER_MAP
-from src.app_core.services.publisher import aggregated_data_publisher
-from src.app_core.state_manager import state_manager
-from src.schemas.market_data_pb2 import AggregatedDataPoint, Candle
-
-
-class AsyncWorker(QObject):
-    """
-    Runs the asyncio event loop in a separate thread to avoid blocking the GUI.
-    """
-
-    def __init__(self):
-        super().__init__()
-        self.loop = asyncio.new_event_loop()
-        self.connection_manager = ConnectionManager()
-        self.symbol_aggregator: SymbolAggregator | None = None
-
-    def run(self):
-        """The main entry point for the thread."""
-        asyncio.set_event_loop(self.loop)
-        self.loop.run_forever()
-
-    async def switch_symbol_async(self, symbol: str):
-        """Coroutine to switch the symbol being tracked."""
-        if self.symbol_aggregator:
-            await self.symbol_aggregator.stop()
-
-        self.symbol_aggregator = SymbolAggregator(symbol, config.supported_timeframes)
-        await self.symbol_aggregator.start()
-        await self.connection_manager.switch_symbol(symbol)
-
-    async def stop_all_async(self):
-        """Coroutine to gracefully shut down all async tasks."""
-        if self.symbol_aggregator:
-            await self.symbol_aggregator.stop()
-        await self.connection_manager.stop_all_connections()
-        self.loop.stop()
-
-
-class UIController(QObject):
-    """
-    The main controller that acts as a bridge between the async core and the Qt UI.
-    """
-    # Signals to emit data to the main UI thread
-    new_aggregated_data = Signal(AggregatedDataPoint)
-    historical_data_loaded = Signal(list)
-
-    def __init__(self):
-        super().__init__()
-        self._async_worker = AsyncWorker()
-        self._thread = QThread()
-        self._async_worker.moveToThread(self._thread)
-
-        self._thread.started.connect(self._async_worker.run)
-        self._thread.start()
-
-        self._ui_queue = aggregated_data_publisher.subscribe()
-        self._start_listening()
-
-    def _start_listening(self):
-        """Starts a background task to listen for new data from the publisher."""
-        listener_thread = threading.Thread(target=self._queue_listener, daemon=True)
-        listener_thread.start()
-
-    def _queue_listener(self):
-        """
-        Runs in a separate thread, pulling data from the asyncio world
-        and emitting it as a Qt signal to the main UI thread.
-        """
-        while True:
-            try:
-                data_point: AggregatedDataPoint = self._ui_queue.get()
-                self.new_aggregated_data.emit(data_point)
-            except queue.Empty:
-                continue
-
-    def switch_symbol(self, symbol: str):
-        """Public method called from the UI to change the active symbol."""
-        state_manager.update_symbol(symbol)
-        asyncio.run_coroutine_threadsafe(
-            self._async_worker.switch_symbol_async(symbol), self._async_worker.loop
-        )
-
-    def load_historical_data(self, symbol: str, timeframe: str):
-        """Kicks off an async task to load historical data without blocking UI."""
-        asyncio.run_coroutine_threadsafe(
-            self._fetch_historical_data_async(symbol, timeframe),
-            self._async_worker.loop,
-        )
-
-    async def _fetch_historical_data_async(self, symbol: str, timeframe: str):
-        """The actual async method to fetch data."""
-        exchange_name = config.exchange_integrations[symbol][0]
-        adapter_class = ADAPTER_MAP.get(exchange_name)
-        if adapter_class:
-            adapter = adapter_class(symbol)
-            candles: List[Candle] = await adapter.fetch_historical_data(timeframe, 500)
-            self.historical_data_loaded.emit(candles)
-
-    def shutdown(self):
-        """Gracefully shuts down the async worker and the thread."""
-        future = asyncio.run_coroutine_threadsafe(
-            self._async_worker.stop_all_async(), self._async_worker.loop
-        )
-        try:
-            future.result(timeout=5)  # Wait for shutdown to complete
-        except TimeoutError:
-            logging.error("Async worker shutdown timed out.")
-        self._thread.quit()
-        self._thread.wait()

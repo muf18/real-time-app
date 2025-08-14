@@ -1,5 +1,6 @@
 import asyncio
-from typing import Set, Any
+from typing import Any, Set
+
 
 class Publisher:
     """A simple asyncio-based fan-out publisher."""
@@ -25,6 +26,7 @@ class Publisher:
                 # Handle backpressure if necessary, e.g., log a warning
                 # For this real-time app, we prefer dropping if UI can't keep up.
                 pass
+
 
 # Create singleton instances for different data types
 raw_trade_publisher = Publisher()

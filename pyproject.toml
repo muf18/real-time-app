@@ -3,8 +3,6 @@ name = "cryptochart"
 version = "0.1.0"
 description = "High-performance, real-time, cross-platform crypto charting client."
 authors = ["Principal Software Engineer <gemini@google.com>"]
-# ** FIX **: Removed the 'readme' key to prevent file path issues during
-# the project installation step in the CI/CD environment.
 packages = [{include = "src"}]
 
 [tool.poetry.dependencies]
@@ -50,9 +48,18 @@ requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.ruff]
+# ** FIX **: Moved settings into the new [lint] section to avoid deprecation warning.
 line-length = 88
-select = ["E", "F", "W", "I", "C90", "N", "UP", "B", "A", "COM", "S", "T20"]
-ignore = ["COM812"]
+
+[tool.ruff.lint]
+select = [
+    "E", "F", "W", "I", "C90", "N", "UP", "B", "A", "COM", "S",
+    "T20", # flake8-print
+]
+ignore = [
+    "COM812", # Missing trailing comma
+    "S101",   # Ignore 'assert' warnings in test files
+]
 
 [tool.mypy]
 python_version = "3.11"

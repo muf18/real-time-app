@@ -1,11 +1,16 @@
-import orjson
+import logging
 from pathlib import Path
+from typing import IO
+
+import orjson
 from pydantic import BaseModel, Field
+
 
 # Define the structure of our persistent state
 class AppState(BaseModel):
     last_symbol: str = Field(default="BTC/USD")
     last_timeframe: str = Field(default="1h")
+
 
 class StateManager:
     """Handles loading and saving the application's persistent state."""
@@ -18,7 +23,7 @@ class StateManager:
         if not self._file_path.exists():
             return AppState()
         try:
-            with open(self._file_path, 'rb') as f:
+            with open(self._file_path, "rb") as f:
                 data = orjson.loads(f.read())
                 return AppState(**data)
         except (orjson.JSONDecodeError, TypeError, ValueError):
@@ -30,11 +35,10 @@ class StateManager:
         try:
             # Ensure parent directory exists
             self._file_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(self._file_path, 'wb') as f:
+            with open(self._file_path, "wb") as f:
                 f.write(orjson.dumps(self._state.model_dump()))
-        except IOError as e:
-            # Handle cases where we can't write to the file
-            print(f"Error saving state: {e}")
+        except OSError as e:
+            logging.error("Error saving state: %s", e)
 
     @property
     def current_state(self) -> AppState:
@@ -47,6 +51,7 @@ class StateManager:
     def update_timeframe(self, timeframe: str):
         self._state.last_timeframe = timeframe
         self.save_state()
+
 
 # Create a default instance for the application to use.
 # The path can be made platform-specific in a real app (e.g., using appdirs).
